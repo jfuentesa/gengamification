@@ -1,4 +1,4 @@
-genericgamification
-===================
+GenGamification
+===============
 
-Generic gamification PHP framework
+GenGamification - Generic gamification PHP framework
