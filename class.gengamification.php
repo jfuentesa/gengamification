@@ -1,5 +1,15 @@
 <?php
 
+/**
+ *
+ * GenGamification - A generic gamification PHP framework
+ *
+ * @author Javier Fuentes <javier.fuentes@redalumnos.com>
+ * @license http://opensource.org/licenses/MIT MIT License
+ * @version 1.0
+ *
+ */
+
 /*
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
