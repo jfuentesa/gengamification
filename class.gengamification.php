@@ -185,7 +185,7 @@ class gengamificationEvent {
 }
 
 class gengamification {
-    /** @var bool $shakeYourBody This stops gamification execution */
+    /** @var bool $letsGoParty This stops gamification execution */
     private $letsGoParty = true;
 
     /** @var array $events Events definitions */
