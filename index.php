@@ -158,6 +158,19 @@ class gengamificationDAO implements gengamificationDAOint {
         return true;
     }
 
+    public function logUserEvent($userId, $eventId, $points = null, $badgeId = null, $levelId = null) {
+        $sql = 'INSERT INTO t_gengamification_log (id_user, id_event, eventdate, points, id_badge, id_level) VALUES (:uid, :eid, UTC_TIMESTAMP(), :p, :bid, :lid)';
+        $params = array(
+            ':uid'  => $userId,
+            ':eid'  => $userId,
+            ':p'    => $points,
+            ':bid'  => $badgeId,
+            ':lid'  => $levelId,
+        );
+        $this->execute($sql, $params);
+        return true;
+    }
+
     public function saveBadgeAlert($userId, $badgeId) {
         $sql = 'INSERT INTO t_gengamification_alerts (id_user, id_badge, id_level) VALUES (:uid, :bid, NULL)';
         $params = array(

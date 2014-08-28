@@ -40,11 +40,11 @@ CREATE TABLE `t_gengamification_events` (
 
 CREATE TABLE `t_gengamification_log` (
   `id_user` int(10) unsigned NOT NULL,
-  `id_event` int(10) unsigned NOT NULL,
+  `id_event` int(10) unsigned DEFAULT NULL,
   `eventdate` datetime NOT NULL,
-  `points` int(11) DEFAULT NULL,
-  `id_badge` int(11) DEFAULT NULL,
-  `id_level` int(11) DEFAULT NULL,
+  `points` int(10) unsigned DEFAULT NULL,
+  `id_badge` int(10) unsigned DEFAULT NULL,
+  `id_level` int(10) unsigned DEFAULT NULL,
   KEY `id_user` (`id_user`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 
@@ -70,6 +70,7 @@ interface gengamificationDAOint {
     public function saveLevelAlert($userId, $levelId);
     public function increaseEventCounter($userId, $eventId);
     public function increaseEventPoints($userId, $eventId, $points);
+    public function logUserEvent($userId, $eventId, $points = null, $badgeId = null, $levelId = null);
 }
 
 class gengamificationEvent {
@@ -215,7 +216,6 @@ class gengamification {
     public function __construct($dao) {
         $this->dao = $dao;
     }
-
 
     /**
      *
@@ -458,7 +458,7 @@ class gengamification {
                                 // If points not reaches max event points, it saves them.
                                 if ($grantPoints) {
                                     // Grant points to user
-                                    $this->grantPoints($e->getPoints());
+                                    $this->grantPoints($e->getPoints(), $this->getEventId($descriptor));
 
                                     // Update points for this event
                                     $this->dao->increaseEventPoints($this->getUserId(), $currentEventId, $e->getPoints());
@@ -466,7 +466,7 @@ class gengamification {
                             }
 
                             // Grant badges
-                            if (!is_null($e->getBadge())) $this->grantBadge($e->getBadge());
+                            if (!is_null($e->getBadge())) $this->grantBadge($e->getBadge(), $this->getEventId($descriptor));
                         }
                     }
                 }
@@ -480,11 +480,14 @@ class gengamification {
     }
 
     // Grant badge to user
-    public function grantBadge($descriptor) {
+    public function grantBadge($descriptor, $eventId = null) {
         if (is_null($this->userId)) throw new Exception(__METHOD__.': Invalid user id');
 
         // Grant badge to user
         $this->dao->grantBadgeToUser($this->getUserId(), $this->getBadgeId($descriptor));
+
+        // Log event
+        $this->dao->logUserEvent($this->getUserId(), $eventId, null, $this->getBadgeId($descriptor));
 
         // Gamification alert
         $this->alertBadge($this->getBadgeId($descriptor));
@@ -496,11 +499,14 @@ class gengamification {
     }
 
     // Grant level to user
-    public function grantLevel($levelId) {
+    public function grantLevel($levelId, $eventId = null) {
         if (is_null($this->userId)) throw new Exception(__METHOD__.': Invalid user id');
 
         // Grant level
         $this->dao->grantLevelToUser($this->getUserId(), $levelId);
+
+        // Log event
+        $this->dao->logUserEvent($this->getUserId(), $eventId, null, null, $levelId);
 
         // Gamification alert
         $this->alertLevel($levelId);
@@ -513,7 +519,7 @@ class gengamification {
     }
 
     // Grant points to user
-    public function grantPoints($points) {
+    public function grantPoints($points, $eventId = null) {
         if (is_null($this->userId)) throw new Exception(__METHOD__.': Invalid user id');
 
         // Get user level/points
@@ -530,6 +536,9 @@ class gengamification {
         // Add points to user counter
         $this->dao->grantPointsToUser($this->getUserId(), $points);
 
+        // Log event
+        $this->dao->logUserEvent($this->getUserId(), $eventId, $points);
+
         // Updated points for levels comparison
         $userPoints += $points;
 
@@ -539,7 +548,7 @@ class gengamification {
             if ($l['id'] > $userCurrentLevel) {
                 // Check if user reaches next level
 
-                if ($userPoints >= $l['threshold']) $this->grantLevel($l['id']);
+                if ($userPoints >= $l['threshold']) $this->grantLevel($l['id'], $eventId);
             }
         }
     }
