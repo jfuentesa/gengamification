@@ -71,6 +71,7 @@ interface gengamificationDAOint {
     public function increaseEventCounter($userId, $eventId);
     public function increaseEventPoints($userId, $eventId, $points);
     public function logUserEvent($userId, $eventId, $points = null, $badgeId = null, $levelId = null);
+    public function getUserLog($userId);
 }
 
 class gengamificationEvent {
@@ -356,6 +357,13 @@ class gengamification {
         return $r;
     }
 
+    // Get user log
+    public function getLog() {
+        if (is_null($this->userId)) throw new Exception(__METHOD__.': Invalid user id');
+
+        return $this->dao->getUserLog($this->getUserId());
+    }
+
     // Get a list of user badges
     public function getBadges() {
         if (is_null($this->userId)) throw new Exception(__METHOD__.': Invalid user id');
@@ -526,7 +534,7 @@ class gengamification {
         $scores = $this->dao->getUserScores($this->getUserId());
 
         if (empty($scores)) {
-            $userCurrentLevel = 1; // Initial level: 1
+            $userCurrentLevel = 1 ; // Initial level: 1 (DON'T CHANGE IT)
             $userPoints = 0;
         } else {
             $userCurrentLevel = $scores['id_level'];

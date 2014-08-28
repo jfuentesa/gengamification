@@ -7,8 +7,8 @@ ini_set('display_errors', 'On');
 // Config
 define('BD_SERVER', 'localhost');
 define('BD_NAME', 'databasename');
-define('BD_USER', 'root');
-define('BD_PASSWD', '');
+define('BD_USER', 'username');
+define('BD_PASSWD', 'password');
 
 // Generic gamification required
 require_once('class.gengamification.php');
@@ -81,7 +81,7 @@ class gengamificationDAO implements gengamificationDAOint {
         );
         $r = $this->toArray($sql, $params);
 
-        if ($resetAlerts) {
+        if (!empty($r) && $resetAlerts) {
             $sql = 'DELETE FROM t_gengamification_alerts WHERE id_user = :uid';
             $params = array(
                 ':uid'  => $userId
@@ -103,6 +103,14 @@ class gengamificationDAO implements gengamificationDAOint {
 
     public function getUserEvents($userId) {
         $sql = 'SELECT id_user, id_event, eventcounter FROM t_gengamification_events WHERE id_user = :uid';
+        $params = array(
+            ':uid'  => $userId
+        );
+        return $this->toArray($sql, $params);
+    }
+
+    public function getUserLog($userId) {
+        $sql = 'SELECT id_user, id_event, eventdate, points, id_badge, id_level FROM t_gengamification_log WHERE id_user = :uid ORDER BY eventdate DESC';
         $params = array(
             ':uid'  => $userId
         );
@@ -149,10 +157,11 @@ class gengamificationDAO implements gengamificationDAOint {
     }
 
     public function grantPointsToUser($userId, $points) {
-        $sql = 'INSERT INTO t_gengamification_scores (id_user, points, id_level) VALUES (:uid, :p, 0) ON DUPLICATE KEY UPDATE  points = points + :p';
+        $sql = 'INSERT INTO t_gengamification_scores (id_user, points, id_level) VALUES (:uid, :p, :firstlevel) ON DUPLICATE KEY UPDATE  points = points + :p';
         $params = array(
-            ':uid'  => $userId,
-            ':p'    => $points
+            ':uid'          => $userId,
+            ':p'            => $points,
+            ':firstlevel'   => 1
         );
         $this->execute($sql, $params);
         return true;
@@ -166,26 +175,6 @@ class gengamificationDAO implements gengamificationDAOint {
             ':p'    => $points,
             ':bid'  => $badgeId,
             ':lid'  => $levelId,
-        );
-        $this->execute($sql, $params);
-        return true;
-    }
-
-    public function saveBadgeAlert($userId, $badgeId) {
-        $sql = 'INSERT INTO t_gengamification_alerts (id_user, id_badge, id_level) VALUES (:uid, :bid, NULL)';
-        $params = array(
-            ':uid'  => $userId,
-            ':bid'  => $badgeId
-        );
-        $this->execute($sql, $params);
-        return true;
-    }
-
-    public function saveLevelAlert($userId, $levelId) {
-        $sql = 'INSERT INTO t_gengamification_alerts (id_user, id_badge, id_level) VALUES (:uid, NULL, :lid)';
-        $params = array(
-            ':uid'  => $userId,
-            ':lid'  => $levelId
         );
         $this->execute($sql, $params);
         return true;
@@ -213,6 +202,27 @@ class gengamificationDAO implements gengamificationDAOint {
         $this->execute($sql, $params);
         return true;
     }
+
+
+    public function saveBadgeAlert($userId, $badgeId) {
+        $sql = 'INSERT INTO t_gengamification_alerts (id_user, id_badge, id_level) VALUES (:uid, :bid, NULL)';
+        $params = array(
+            ':uid'  => $userId,
+            ':bid'  => $badgeId
+        );
+        $this->execute($sql, $params);
+        return true;
+    }
+
+    public function saveLevelAlert($userId, $levelId) {
+        $sql = 'INSERT INTO t_gengamification_alerts (id_user, id_badge, id_level) VALUES (:uid, NULL, :lid)';
+        $params = array(
+            ':uid'  => $userId,
+            ':lid'  => $levelId
+        );
+        $this->execute($sql, $params);
+        return true;
+    }
 }
 
 // Creation of gamification engine
@@ -226,7 +236,7 @@ $g->addBadge('the_one', 'The One', 'You have logged in 10 times (50 points)', 'i
 
 // Levels definitions
 $g->addLevel(0, 'No Star')
-    ->addLevel(53, 'One star')
+    ->addLevel(50, 'One star')
     ->addLevel(500, 'Three stars')
     ->addLevel(1000, 'Five stars', 'grant_five_stars_badge'); // Execute event: grant_five_stars_badge
 
@@ -291,10 +301,13 @@ $g->setUserId(1);
 // $g->grantBadge('predefined_badge');
 
 // Grant points
-//$g->grantPoints(1);
+// $g->grantPoints(1);
 
 // Get user alerts
-//print_r($g->getAlerts());
+// print_r($g->getAlerts(true));
 
 // Get user badges
 // print_r($g->getBadges());
+
+// Get user log
+// print_r($g->getLog());
