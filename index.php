@@ -304,10 +304,10 @@ $g->setUserId(1);
 // $g->grantPoints(1);
 
 // Get user alerts
-// print_r($g->getAlerts(true));
+// print_r($g->getUserAlerts(true));
 
 // Get user badges
-// print_r($g->getBadges());
+// print_r($g->getUserBadges());
 
 // Get user log
-// print_r($g->getLog());
+// print_r($g->getUserLog());

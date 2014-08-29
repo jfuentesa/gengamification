@@ -317,7 +317,7 @@ class gengamification {
         else return false;
     }
 
-    public function getAlerts($resetAlerts = false) {
+    public function getUserAlerts($resetAlerts = false) {
         if (is_null($this->userId)) throw new Exception(__METHOD__.': Invalid user id');
 
         return $this->dao->getUserAlerts($this->getUserId(), $resetAlerts);
@@ -348,7 +348,7 @@ class gengamification {
     }
 
     // Get event id
-    private function getLevel($id) {
+    public function getLevel($id) {
         $r = array();
         foreach ($this->levels as $l) {
             if ($id == $l['id']) $r = $l;
@@ -358,14 +358,14 @@ class gengamification {
     }
 
     // Get user log
-    public function getLog() {
+    public function getUserLog() {
         if (is_null($this->userId)) throw new Exception(__METHOD__.': Invalid user id');
 
         return $this->dao->getUserLog($this->getUserId());
     }
 
     // Get a list of user badges
-    public function getBadges() {
+    public function getUserBadges() {
         if (is_null($this->userId)) throw new Exception(__METHOD__.': Invalid user id');
 
         $r = array();
@@ -389,7 +389,33 @@ class gengamification {
     public function getUserScores() {
         if (is_null($this->userId)) throw new Exception(__METHOD__.': Invalid user id');
 
-        return $this->dao->getUserScores($this->getUserId());
+        $r = $this->dao->getUserScores($this->getUserId());
+
+        // Include additional progress data
+        if (empty($r)) {
+            $r['id_user'] = $this->getUserId();
+            $r['points'] = '0';
+            $r['id_level'] = 1;
+        }
+
+        $level = $this->getLevel($r['id_level']);
+        $nextLevel = $this->getLevel($r['id_level'] + 1);
+
+        $r['progress'] = 0;
+        $r['levelpoints'] = 0;
+        $r['levelname'] = $level['descriptor'];
+
+        // If exists next level
+        if (empty($nextlevel)) {
+            // Points of this level
+            $totalLevelPoints = $nextLevel['threshold'] - $level['threshold'];
+            $r['levelpoints'] = $r['points'] - $level['threshold'];
+
+            // Progress percentage to reach next level
+            $r['progress'] = round(($r['levelpoints'] * 100) / $totalLevelPoints);
+        }
+
+        return $r;
     }
 
     // Get user id
