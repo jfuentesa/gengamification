@@ -6,7 +6,14 @@
  *
  * @author Javier Fuentes <javier.fuentes@redalumnos.com>
  * @license http://opensource.org/licenses/MIT MIT License
- * @version 1.0
+ * @version 1.1
+ *
+ * CHANGES:
+ *
+ * 2014-09-02:
+ *
+ * Now addEvent and addBadgets accepts event IDs.
+ * Added setTestUserId() for testing purposes.
  *
  */
 
@@ -75,11 +82,14 @@ interface gengamificationDAOint {
 }
 
 class gengamificationEvent {
-    private $repetitions = null;        /* Counter trigger (1 = unique event / null = triggers every execution) */
-    private $allowrepetitions = false;  /* Allows repetitions */
+    private $id = null;
+
+    private $repetitions = null;        /* Trigger counter (null = triggers every execution. $allowrepetitions must be true, otherwise triggers once) */
+    private $allowrepetitions = false;  /* Allows repetitions (Default: NO) */
 
     private $badge = null;              /* Badge granted when triggers */
     private $descriptor = null;         /* Event descriptor */
+    private $description = null;         /* Event description */
     private $points = null;             /* Points granted when triggers */
     private $maxpoints = null;          /* Max points granted for this event */
     private $eachcallback = null;       /* Each callback function */
@@ -91,6 +101,10 @@ class gengamificationEvent {
 
     public function getBadge() {
         return $this->badge;
+    }
+
+    public function getDescription() {
+        return $this->description;
     }
 
     public function getDescriptor() {
@@ -105,6 +119,11 @@ class gengamificationEvent {
     public function getEventCallback()
     {
         return $this->eventcallback;
+    }
+
+    public function getId()
+    {
+        return $this->id;
     }
 
     public function getMaxpoints() {
@@ -136,6 +155,15 @@ class gengamificationEvent {
         return $this;
     }
 
+    public function setDescription($str) {
+        $str = trim($str);
+        if (empty($str)) throw new Exception(__METHOD__.': Invalid description');
+
+        $this->description = $str;
+
+        return $this;
+    }
+
     public function setDescriptor($str) {
         $str = trim($str);
         if (empty($str)) throw new Exception(__METHOD__.': Invalid descriptor');
@@ -157,6 +185,14 @@ class gengamificationEvent {
         if (!is_callable($f)) throw new Exception(__METHOD__.': Invalid callback function');
 
         $this->eventcallback = $f;
+
+        return $this;
+    }
+
+    public function setId($f) {
+        if (!is_numeric($f)) throw new Exception(__METHOD__.': Invalid id');
+
+        $this->id = $f;
 
         return $this;
     }
@@ -187,8 +223,11 @@ class gengamificationEvent {
 }
 
 class gengamification {
-    /** @var bool $letsGoParty This stops gamification execution */
-    private $letsGoParty = true;
+    /** @var bool $letsGoParty false = stops gamification execution */
+    private $letsGoParty = null;
+
+    /** @var int $testUserId */
+    private $testUserId = null;
 
     /** @var array $events Events definitions */
     private $events = array();
@@ -203,8 +242,6 @@ class gengamification {
     private $userId = null;
 
     // Definitions counters
-    private $badgesCounter = 0;
-    private $eventsCounter = 0;
     private $levelsCounter = 0;
 
     // Events queue
@@ -214,23 +251,31 @@ class gengamification {
     /** @var gengamificationDAO $dao */
     private $dao = null;
 
-    public function __construct($dao) {
-        $this->dao = $dao;
+    public function __construct($enabled = true) {
+        $this->letsGoParty = $enabled;
     }
 
     /**
      *
-     * Public functions
+     * Add badge to gamification engine
+     *
+     * @param      $id
+     * @param      $internalDescriptor
+     * @param      $descriptor
+     * @param      $description
+     * @param      $imageURL
+     * @param null $event
+     *
+     * @return $this
+     * @throws Exception
      *
      */
-
-    // Add badge to gamification engine
-    public function addBadge($internalDescriptor, $descriptor, $description, $imageURL, $event = null) {
+    public function addBadge($id, $internalDescriptor, $descriptor, $description, $imageURL, $event = null) {
         if (empty($descriptor) || empty($description)) throw new Exception(__METHOD__.': Invalid parameters');
 
         // Add event to gamification events array
-        $this->badges[$internalDescriptor] = array(
-            'id'            => ++$this->badgesCounter,
+        $this->badges[$id] = array(
+            'id'            => $id,
             'internal'      => $internalDescriptor,
             'descriptor'    => $descriptor,
             'description'   => $description,
@@ -260,10 +305,20 @@ class gengamification {
 
         // Add new event/trigger to array events
         if (isset($this->events[$i])) {
-            if ($this->events[$i]['allowrepetitions'] != $event->allowRepetitions()) throw new Exception(__METHOD__.': Allow repetitions not match for the event');
+            // If event exists just add new trigger
+
+            // Checking allowrepetitions matching with previously created event
+            if ($this->events[$i]['allowrepetitions'] != $event->allowRepetitions()) throw new Exception(__METHOD__.': Allow repetitions does not match for the event');
+            // Checking id (not required) for same event descriptor
+            if (!is_null($event->getId())) {
+                if ($this->events[$i]['id'] != $event->getId()) throw new Exception(__METHOD__.': Id does not match for the event');
+            }
         } else {
+            // Check event id
+            if (!is_numeric($event->getId())) throw new Exception(__METHOD__.': Invalid event id');
+
             $this->events[$i] = array(
-                'id'                    => ++$this->eventsCounter,
+                'id'                    => $event->getId(),
                 'allowrepetitions'      => $event->allowRepetitions(),
                 'triggers'              => array()
             );
@@ -275,11 +330,29 @@ class gengamification {
         return $this;
     }
 
+    /**
+     *
+     * Add event to pending events queue
+     *
+     * @param $descriptor
+     *
+     */
     private function addEventToQueue($descriptor) {
         $this->eventsQueue[] = $descriptor;
     }
 
-    // Add badge to gamification engine
+    /**
+     *
+     * Add badge to gamification engine
+     *
+     * @param      $pointsThreshold
+     * @param      $descriptor
+     * @param null $eventDescriptor
+     *
+     * @return $this
+     * @throws Exception
+     *
+     */
     public function addLevel($pointsThreshold, $descriptor, $eventDescriptor = null) {
         $descriptor = trim($descriptor);
 
@@ -296,7 +369,15 @@ class gengamification {
         return $this;
     }
 
-    // Save alert for received badges
+    /**
+     *
+     * Save alert for received badges
+     *
+     * @param $id
+     *
+     * @return bool
+     *
+     */
     private function alertBadge($id) {
         // Save alert
         $this->dao->saveBadgeAlert($this->getUserId(), $id);
@@ -304,7 +385,15 @@ class gengamification {
         return true;
     }
 
-    // Save alert for level upgrade
+    /**
+     *
+     * Save alert for level upgrade
+     *
+     * @param $id
+     *
+     * @return bool
+     *
+     */
     private function alertLevel($id) {
         // Save alert
         $this->dao->saveLevelAlert($this->getUserId(), $id);
@@ -313,8 +402,11 @@ class gengamification {
     }
 
     private function badgeExists($descriptor) {
-        if (array_key_exists($descriptor, $this->badges)) return true;
-        else return false;
+        foreach ($this->badges as $b) {
+            if ($descriptor == $b['internal']) return true;
+        }
+
+        return false;
     }
 
     public function getUserAlerts($resetAlerts = false) {
@@ -323,31 +415,69 @@ class gengamification {
         return $this->dao->getUserAlerts($this->getUserId(), $resetAlerts);
     }
 
-    // Get badge info from id
+    /**
+     *
+     * Get badge info from id
+     *
+     * @param $id
+     *
+     * @return mixed
+     * @throws Exception
+     *
+     */
     public function getBadge($id) {
-        $r = array();
+        if (!isset($this->badges[$id])) throw new Exception(__METHOD__.': Invalid badge');
+
+        return $this->badges[$id];
+    }
+
+    /**
+     *
+     * Get badge id
+     *
+     * @param $descriptor
+     *
+     * @return null
+     * @throws Exception
+     *
+     */
+    private function getBadgeId($descriptor) {
+        $r = null;
+
         foreach ($this->badges as $b) {
-            if ($id == $b['id']) $r = $b;
+            if ($descriptor == $b['internal']) $r = $b['id'];
         }
+
+        if (is_null($r)) throw new Exception(__METHOD__.': Invalid badge');
 
         return $r;
     }
 
-    // Get badge id
-    private function getBadgeId($descriptor) {
-        if (empty($this->badges[$descriptor])) throw new Exception(__METHOD__.': Invalid badge');
-
-        return $this->badges[$descriptor]['id'];
-    }
-
-    // Get event id
+    /**
+     *
+     * Get event id
+     *
+     * @param $descriptor
+     *
+     * @return mixed
+     * @throws Exception
+     *
+     */
     private function getEventId($descriptor) {
         if (empty($this->events[$descriptor])) throw new Exception(__METHOD__.': Invalid event');
 
         return $this->events[$descriptor]['id'];
     }
 
-    // Get event id
+    /**
+     *
+     * Get event id
+     *
+     * @param $id
+     *
+     * @return array
+     *
+     */
     public function getLevel($id) {
         $r = array();
         foreach ($this->levels as $l) {
@@ -357,14 +487,28 @@ class gengamification {
         return $r;
     }
 
-    // Get user log
+    /**
+     *
+     * Get user log
+     *
+     * @return array
+     * @throws Exception
+     *
+     */
     public function getUserLog() {
         if (is_null($this->userId)) throw new Exception(__METHOD__.': Invalid user id');
 
         return $this->dao->getUserLog($this->getUserId());
     }
 
-    // Get a list of user badges
+    /**
+     *
+     * Get a list of user badges
+     *
+     * @return array
+     * @throws Exception
+     *
+     */
     public function getUserBadges() {
         if (is_null($this->userId)) throw new Exception(__METHOD__.': Invalid user id');
 
@@ -385,7 +529,14 @@ class gengamification {
         return $r;
     }
 
-    // Get user scores
+    /**
+     *
+     * Get user scores
+     *
+     * @return mixed
+     * @throws Exception
+     *
+     */
     public function getUserScores() {
         if (is_null($this->userId)) throw new Exception(__METHOD__.': Invalid user id');
 
@@ -418,17 +569,41 @@ class gengamification {
         return $r;
     }
 
-    // Get user id
+    /**
+     *
+     * Get user id
+     *
+     * @return null
+     * @throws Exception
+     *
+     */
     public function getUserId() {
         if (is_null($this->userId)) throw new Exception(__METHOD__.': Invalid user id');
 
         return $this->userId;
     }
 
-    // Execute gamification event
+    /**
+     *
+     * Execute gamification event
+     *
+     * @param      $descriptor
+     * @param null $additional
+     *
+     * @return bool
+     * @throws Exception
+     *
+     */
     public function executeEvent($descriptor, $additional = null) {
+        // Is the service enabled?
         if (!$this->letsGoParty) return false;
 
+        // Filter to user test
+        if (!is_null($this->testUserId)) {
+            if ($this->testUserId != $this->userId) return false;
+        }
+
+        // Check invalid event
         if (!isset($this->events[$descriptor])) throw new Exception(__METHOD__.': Invalid event');
 
         // Get id of event in $this->events array
@@ -446,20 +621,34 @@ class gengamification {
             $eventPoints = $userEvent['pointscounter'];
         }
 
-        // Is this event allowed to repeat?
+        // Event doesn't executes if $eventCounter > 0 AND 'allowrepetitions' is false
         $executeEvent = true;
-        if (!$this->events[$descriptor]['allowrepetitions'] && $eventCounter > 0) $executeEvent = false;
+        if (($eventCounter > 0) && !$this->events[$descriptor]['allowrepetitions']) $executeEvent = false;
 
         // Is the event allow to execute?
         if ($executeEvent) {
-            // Update counter for this event
-            $this->dao->increaseEventCounter($this->getUserId(), $currentEventId);
-
             // Increase internal counter for this user/event
             $eventCounter++;
 
+            // Check if any trigger in the event is higher than current event counter for updating database
+            $updateCounter = false;
+            if ($eventCounter == 1) {
+                // First execution time counter for event is always updated
+                $updateCounter = true;
+            } else {
+                // Check every trigger for required repetitions
+                /** @var $e gengamificationEvent */
+                foreach ($this->events[$descriptor]['triggers'] as $e) {
+                    if (!is_null($e->getRequiredRepetitions())) {
+                        if ($e->getRequiredRepetitions() > $eventCounter) $updateCounter = true;
+                    }
+                }
+            }
+
+            // Update counter for this event
+            if ($updateCounter) $this->dao->increaseEventCounter($this->getUserId(), $currentEventId);
+
             // Search triggers counter
-            /** @var $e gengamificationEvent */
             foreach ($this->events[$descriptor]['triggers'] as $e) {
                 $eachOk = true;
 
@@ -513,27 +702,49 @@ class gengamification {
         return true;
     }
 
-    // Grant badge to user
+    /**
+     *
+     * Grant badge to user
+     *
+     * @param      $descriptor
+     * @param null $eventId
+     *
+     * @return bool
+     * @throws Exception
+     *
+     */
     public function grantBadge($descriptor, $eventId = null) {
         if (is_null($this->userId)) throw new Exception(__METHOD__.': Invalid user id');
 
+        $badgeId = $this->getBadgeId($descriptor);
+
         // Grant badge to user
-        $this->dao->grantBadgeToUser($this->getUserId(), $this->getBadgeId($descriptor));
+        $this->dao->grantBadgeToUser($this->getUserId(), $badgeId);
 
         // Log event
-        $this->dao->logUserEvent($this->getUserId(), $eventId, null, $this->getBadgeId($descriptor));
+        $this->dao->logUserEvent($this->getUserId(), $eventId, null, $badgeId);
 
         // Gamification alert
-        $this->alertBadge($this->getBadgeId($descriptor));
+        $this->alertBadge($badgeId);
 
         // Add event to queue when the user reach this level
-        if (!is_null($this->badges[$descriptor]['event'])) $this->addEventToQueue($this->badges[$descriptor]['event']);
+        if (!is_null($this->badges[$badgeId]['event'])) $this->addEventToQueue($this->badges[$badgeId]['event']);
 
         return true;
     }
 
-    // Grant level to user
-    public function grantLevel($levelId, $eventId = null) {
+    /**
+     *
+     * Grant level to user
+     *
+     * @param      $levelId
+     * @param null $eventId
+     *
+     * @return bool
+     * @throws Exception
+     *
+     */
+    private function grantLevel($levelId, $eventId = null) {
         if (is_null($this->userId)) throw new Exception(__METHOD__.': Invalid user id');
 
         // Grant level
@@ -552,7 +763,16 @@ class gengamification {
         return true;
     }
 
-    // Grant points to user
+    /**
+     *
+     * Grant points to user
+     *
+     * @param      $points
+     * @param null $eventId
+     *
+     * @throws Exception
+     *
+     */
     public function grantPoints($points, $eventId = null) {
         if (is_null($this->userId)) throw new Exception(__METHOD__.': Invalid user id');
 
@@ -587,7 +807,12 @@ class gengamification {
         }
     }
 
-    // Execute next event of the events queue
+    /**
+     * @param null $data
+     *
+     * Execute next event of the events queue
+     *
+     */
     private function processEventsQueue($data = null) {
         if (!empty($this->eventsQueue)) {
             $eventDescriptor = array_shift($this->eventsQueue);
@@ -596,16 +821,60 @@ class gengamification {
         }
     }
 
-    // Set Data Access Object
+    /**
+     *
+     * Set Data Access Object
+     *
+     * @param $dao
+     *
+     */
     public function setDAO($dao) {
         $this->dao = $dao;
     }
 
-    // Set user id
+    /**
+     *
+     * Enable/disable executeEvent() globally
+     *
+     * @param bool $enabled
+     *
+     */
+    public function setEnabled($enabled = true) {
+        $this->letsGoParty = $enabled;
+    }
+
+    /**
+     *
+     * Set user id
+     *
+     * @param $userId
+     *
+     * @return bool
+     * @throws Exception
+     *
+     */
     public function setUserId($userId) {
         if (!is_numeric($userId)) throw new Exception(__METHOD__.': Invalid parameters');
 
         $this->userId = $userId;
+
+        return true;
+    }
+
+    /**
+     *
+     * Set user id
+     *
+     * @param $userId
+     *
+     * @return bool
+     * @throws Exception
+     *
+     */
+    public function setTestUserId($userId) {
+        if (!is_numeric($userId)) throw new Exception(__METHOD__.': Invalid parameters');
+
+        $this->testUserId = $userId;
 
         return true;
     }
