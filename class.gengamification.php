@@ -10,58 +10,21 @@
  *
  * CHANGES:
  *
+ * 2014-10-21:
+ *
+ * Added getLastLevelId()
+ * Added printBadges()
+ * Added printProgressBar()
+ * Added getUserEvents()
+ * Added getEventById()
+ * Added private method getEventById() to get event by id
+ * Fixed repeated events when required repetitions and repetitions are allowed
+ *
  * 2014-09-02:
  *
  * Now addEvent and addBadgets accepts event IDs.
  * Added setTestUserId() for testing purposes.
  *
- */
-
-/*
-
-SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
-SET time_zone = "+00:00";
-
-CREATE TABLE `t_gengamification_alerts` (
-  `id_user` int(10) unsigned NOT NULL,
-  `id_badge` int(10) unsigned DEFAULT NULL,
-  `id_level` int(10) unsigned DEFAULT NULL,
-  KEY `id_user` (`id_user`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
-
-CREATE TABLE `t_gengamification_badges` (
-  `id_user` int(10) unsigned NOT NULL,
-  `id_badge` int(10) unsigned NOT NULL,
-  `badgescounter` int(10) unsigned NOT NULL,
-  `grantdate` datetime NOT NULL,
-  PRIMARY KEY (`id_user`,`id_badge`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
-
-CREATE TABLE `t_gengamification_events` (
-  `id_user` int(10) unsigned NOT NULL,
-  `id_event` int(10) unsigned NOT NULL,
-  `eventcounter` int(10) unsigned NOT NULL,
-  `pointscounter` int(10) unsigned NOT NULL,
-  PRIMARY KEY (`id_user`,`id_event`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
-
-CREATE TABLE `t_gengamification_log` (
-  `id_user` int(10) unsigned NOT NULL,
-  `id_event` int(10) unsigned DEFAULT NULL,
-  `eventdate` datetime NOT NULL,
-  `points` int(10) unsigned DEFAULT NULL,
-  `id_badge` int(10) unsigned DEFAULT NULL,
-  `id_level` int(10) unsigned DEFAULT NULL,
-  KEY `id_user` (`id_user`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
-
-CREATE TABLE `t_gengamification_scores` (
-  `id_user` int(10) unsigned NOT NULL,
-  `points` int(10) unsigned NOT NULL,
-  `id_level` int(10) unsigned NOT NULL,
-  PRIMARY KEY (`id_user`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
-
  */
 
 interface gengamificationDAOint {
@@ -417,6 +380,42 @@ class gengamification {
 
     /**
      *
+     * Get user events progress
+     *
+     * @return array
+     * @throws Exception
+     *
+     *
+     *
+     */
+    public function getUserEvents() {
+        if (is_null($this->userId)) throw new Exception(__METHOD__.': Invalid user id');
+
+        $r = array();
+
+        foreach ($this->dao->getUserEvents($this->getUserId()) as $x) {
+            $_ = $this->getEventById($x['id_event']);
+
+            $triggers = array();
+            /** @var $trigger gengamificationEvent */
+            foreach ($_['triggers'] as $trigger) {
+                $triggers[] = array(
+                    'reached'       => ($x['eventcounter'] >= $trigger->getRequiredRepetitions() ? true : false),
+                    'description'   => $trigger->getDescription(),
+                );
+            }
+            $r[] = array(
+                'id'            => $x['id_event'],
+                'counter'       => $x['eventcounter'],
+                'triggers'      => $triggers
+            );
+        }
+
+        return $r;
+    }
+
+    /**
+     *
      * Get badge info from id
      *
      * @param $id
@@ -448,7 +447,19 @@ class gengamification {
             if ($descriptor == $b['internal']) $r = $b['id'];
         }
 
-        if (is_null($r)) throw new Exception(__METHOD__.': Invalid badge');
+        if (is_null($r)) throw new Exception(__METHOD__.': Invalid badge id');
+
+        return $r;
+    }
+
+    private function getEventById($id) {
+        $r = null;
+
+        foreach ($this->events as $e) {
+            if ($id == $e['id']) $r = $e;
+        }
+
+        if (is_null($r)) throw new Exception(__METHOD__.': Invalid event id');
 
         return $r;
     }
@@ -471,7 +482,7 @@ class gengamification {
 
     /**
      *
-     * Get event id
+     * Get level
      *
      * @param $id
      *
@@ -485,6 +496,19 @@ class gengamification {
         }
 
         return $r;
+    }
+
+    /**
+     *
+     * Get last level id
+     *
+     * @param $id
+     *
+     * @return array
+     *
+     */
+    public function getLastLevelId() {
+        return (string)count($this->levels);
     }
 
     /**
@@ -549,21 +573,17 @@ class gengamification {
             $r['id_level'] = 1;
         }
 
+        // Get user current level
         $level = $this->getLevel($r['id_level']);
         $nextLevel = $this->getLevel($r['id_level'] + 1);
 
-        $r['progress'] = 0;
-        $r['levelpoints'] = 0;
+        $r['progress'] = 100;
         $r['levelname'] = $level['descriptor'];
 
-        // If exists next level
-        if (empty($nextlevel)) {
-            // Points of this level
-            $totalLevelPoints = $nextLevel['threshold'] - $level['threshold'];
-            $r['levelpoints'] = $r['points'] - $level['threshold'];
-
+        // It isn't the last level
+        if (!empty($nextLevel)) {
             // Progress percentage to reach next level
-            $r['progress'] = round(($r['levelpoints'] * 100) / $totalLevelPoints);
+            $r['progress'] = round((($r['points'] - $level['threshold']) * 100) / ($nextLevel['threshold'] - $level['threshold']));
         }
 
         return $r;
@@ -621,7 +641,7 @@ class gengamification {
             $eventPoints = $userEvent['pointscounter'];
         }
 
-        // Event doesn't executes if $eventCounter > 0 AND 'allowrepetitions' is false
+        // Event doesn't executes if $eventCounter > 0 AND 'allowrepetitions' is false (events executed once are eventcounter = 1)
         $executeEvent = true;
         if (($eventCounter > 0) && !$this->events[$descriptor]['allowrepetitions']) $executeEvent = false;
 
@@ -636,11 +656,13 @@ class gengamification {
                 // First execution time counter for event is always updated
                 $updateCounter = true;
             } else {
-                // Check every trigger for required repetitions
+                // COUNTERS WON'T BE UPDATED IF NOT REQUIRED FOR CONTROL EVENT REPETITIONS
+
+                // If any trigger for this event require more repetitions than eventcounter, eventcounter is updated (increased +1)
                 /** @var $e gengamificationEvent */
                 foreach ($this->events[$descriptor]['triggers'] as $e) {
                     if (!is_null($e->getRequiredRepetitions())) {
-                        if ($e->getRequiredRepetitions() > $eventCounter) $updateCounter = true;
+                        if ($e->getRequiredRepetitions() >= $eventCounter) $updateCounter = true;
                     }
                 }
             }
@@ -680,7 +702,7 @@ class gengamification {
 
                                 // If points not reaches max event points, it saves them.
                                 if ($grantPoints) {
-                                    // Grant points to user
+                                    // Grant points from current event to user scores
                                     $this->grantPoints($e->getPoints(), $this->getEventId($descriptor));
 
                                     // Update points for this event
@@ -801,10 +823,144 @@ class gengamification {
             // Check levels higher than user level
             if ($l['id'] > $userCurrentLevel) {
                 // Check if user reaches next level
-
                 if ($userPoints >= $l['threshold']) $this->grantLevel($l['id'], $eventId);
             }
         }
+    }
+
+    public function pointsToNextLevel() {
+        $scores = $this->getUserScores();
+
+        $r = null;
+
+        // Check last level
+        if ((int)$scores['id_level'] < (int)$this->getLastLevelId()) {
+            $nextLevel = $this->getLevel($scores['id_level'] + 1);
+            $r = $nextLevel['threshold'] - $scores['points'];
+        }
+
+        return $r;
+    }
+
+    public function prepareAlertsSection($return = false) {
+        if (is_null($this->userId)) throw new Exception(__METHOD__.': Invalid user id');
+
+        $r = '';
+
+        $alerts = $this->getUserAlerts(true);
+
+        if (!empty($alerts)) {
+            $levelId = 0;
+            $levelLabel = '';
+            $badges = array();
+
+            foreach ($alerts as $a) {
+                // Get alert for new level
+                if (!is_null($a['id_level'])) {
+                    if ($a['id_level'] > $levelId) {
+                        $level = $this->getLevel($a['id_level']);
+                        $levelId = $a['id_level'];
+                        $levelLabel = $level['descriptor'];
+                    }
+                }
+
+                // Get alert for new badge
+                if (!is_null($a['id_badge'])) {
+                    $badges[] = $a['id_badge'];
+                }
+            }
+
+            $gamifCongratsBodyLevel = '';
+            if ($levelId) {
+                $gamifCongratsBodyLevel = <<<LEVEL
+<p>Has alcanzado el nivel:</p>
+<p id="gengamif-level-number">$levelId</p>
+<p id="gengamif-level-label">$levelLabel</p>
+LEVEL;
+            }
+
+            $gamifCongratsBodyBadges = '';
+            if (!empty($badges)) {
+                foreach ($badges as $b) {
+                    $badge = $this->getBadge($b);
+
+                    $gamifCongratsBodyBadges .= '<img class="gengamif-badgeimage" src="'.$badge['imageurl'].'" title="'.htmlspecialchars($badge['descriptor']).' - '.htmlspecialchars($badge['description']).'">';
+                }
+
+                $gamifCongratsBodyBadges = '<p>Has obtenido las siguientes medallas:</p><div id="gengamif-badgeslist">'.$gamifCongratsBodyBadges.'</div>';
+            }
+
+            $pointsLeft = $this->pointsToNextLevel();
+            $pointsLeftStr = '';
+            if (!is_null($pointsLeft)) $pointsLeftStr = '<p>Te faltan '.$pointsLeft.' puntos para alcanzar el próximo nivel, ¡ánimo!</p>';
+
+            $r = <<<LEVEL
+<section id="gengamif-alerts">
+<section id="gengamif-alerts-inner">
+<h3>¡Enhorabuena!</h3>
+$gamifCongratsBodyLevel
+$gamifCongratsBodyBadges
+<section id="gengamif-alerts-footer">
+$pointsLeftStr
+</section>
+</section>
+</section>
+LEVEL;
+
+        }
+
+        if ($return) return $r;
+
+        echo $r;
+        return true;
+    }
+
+    public function printBadges() {
+        if (is_null($this->userId)) throw new Exception(__METHOD__.': Invalid user id');
+
+        $r = '';
+
+        foreach ($this->getUserBadges() as $m) {
+            $r .= '<img class="gengamif-badge-image" src="'.$m['imageurl'].'" title="'.htmlspecialchars($m['descriptor']).' - '.htmlspecialchars($m['description']).'">';
+        }
+
+        if (!empty($r)) $r = '<section class="gengamif-badges-images">'.$r.'</section>';
+
+        return $r;
+    }
+
+    public function printProgressBar($return = false) {
+        if (is_null($this->userId)) {
+            $level = $this->getLevel(1);
+            $_ = array(
+                'points'    => 0,
+                'progress'  => 0,
+                'id_level'  => 1,
+                'levelname' => $level['descriptor']
+            );
+        } else {
+            $_ = $this->getUserScores();
+        }
+
+        $puntos = $_['points'].' '.T_('puntos');
+        $progreso = $_['progress'];
+        $nivel = T_('Nivel: ').' '.$_['id_level'];
+        $nombreNivel = $_['levelname'];
+
+        $r = <<<EOF
+<div class="gamif-info" style="margin: 10px 0;">
+<div class="gamif-progressbar-points" style="padding-left: 5px;font-size: 13px; text-align: center;">$puntos</div>
+<div class="gamif-progressbar" style="border: 1px solid #ddd;height: 10px;overflow: hidden;">
+<div class="gamif-progressbar-fill" style="width: $progreso%;height: 10px;background-color: #26AF61;"></div>
+</div>
+<div class="gamif-progressbar-level" style="font-size: 13px; text-align: center;width: 100%;white-space:nowrap;overflow: hidden; text-overflow: ellipsis"><a title="$nivel" href="config.php?m=progress">$nombreNivel</a></div>
+</div>
+EOF;
+
+        if ($return) return $r;
+
+        echo $r;
+        return true;
     }
 
     /**

@@ -1,5 +1,15 @@
 <?php
 
+/*
+ *
+ * CHANGES:
+ *
+ * 2014-10-21:
+ *
+ * Fixed logUserEvent() eventId error.
+ *
+ */
+
 // Data Access Object for gengamification persistent data layer
 class gengamificationDAO implements gengamificationDAOint {
     public $conn = null;
@@ -158,7 +168,7 @@ class gengamificationDAO implements gengamificationDAOint {
         $sql = 'INSERT INTO t_gengamification_log (id_user, id_event, eventdate, points, id_badge, id_level) VALUES (:uid, :eid, UTC_TIMESTAMP(), :p, :bid, :lid)';
         $params = array(
             ':uid'  => $userId,
-            ':eid'  => $userId,
+            ':eid'  => $eventId,
             ':p'    => $points,
             ':bid'  => $badgeId,
             ':lid'  => $levelId,
