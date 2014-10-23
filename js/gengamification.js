@@ -10,7 +10,8 @@ var gengamification = {
                 '#gengamif-alerts #gengamif-alerts-inner #gengamif-level-label {font-size: 18px;color: #26AF61;} ' +
                 '#gengamif-alerts #gengamif-alerts-inner #gengamif-alerts-footer p {text-align: center;font-size: 15px;margin: 10px;} ' +
                 '#gengamif-alerts #gengamif-badgeslist {text-align: center;overflow: hidden} ' +
-                '#gengamif-alerts #gengamif-badgeslist .gengamif-badgeimage {display: inline-block;margin:0 10px} ' +
+                '#gengamif-alerts #gengamif-badgeslist .gengamif-badge {display: inline-block;width: 120px;border-radius: 3px;padding: 3px;font-size: 10px;overflow: hidden;vertical-align: top;} ' +
+                '#gengamif-alerts #gengamif-badgeslist img {margin:0 10px} ' +
                 '.gengamif-badges-images {text-align: center;} ' +
                 '.gengamif-badges-images .gengamif-badge-image {display: inline-block;margin:10px;} ' +
                 '</style>';

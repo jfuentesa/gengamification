@@ -884,7 +884,7 @@ LEVEL;
                 foreach ($badges as $b) {
                     $badge = $this->getBadge($b);
 
-                    $gamifCongratsBodyBadges .= '<img class="gengamif-badgeimage" src="'.$badge['imageurl'].'" title="'.htmlspecialchars($badge['descriptor']).' - '.htmlspecialchars($badge['description']).'">';
+                    $gamifCongratsBodyBadges .= '<div class="gengamif-badge"><img src="'.$badge['imageurl'].'" title="'.htmlspecialchars($badge['descriptor']).' - '.htmlspecialchars($badge['description']).'"><br />'.htmlspecialchars($badge['descriptor']).'<br />'.htmlspecialchars($badge['description']).'</div>';
                 }
 
                 $gamifCongratsBodyBadges = '<p>Has obtenido las siguientes medallas:</p><div id="gengamif-badgeslist">'.$gamifCongratsBodyBadges.'</div>';
@@ -921,7 +921,7 @@ LEVEL;
         $r = '';
 
         foreach ($this->getUserBadges() as $m) {
-            $r .= '<img class="gengamif-badge-image" src="'.$m['imageurl'].'" title="'.htmlspecialchars($m['descriptor']).' - '.htmlspecialchars($m['description']).'">';
+            $r .= '<img src="'.$m['imageurl'].'" title="'.htmlspecialchars($m['descriptor']).' - '.htmlspecialchars($m['description']).'">';
         }
 
         if (!empty($r)) $r = '<section class="gengamif-badges-images">'.$r.'</section>';
